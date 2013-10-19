@@ -404,7 +404,8 @@ sub _request {
         headers   => {},
     };
 
-    my $handle_class = $self->{handle_class} || 'HTTP::Tiny::Handle';
+    my $handle_class = $self->can('handle_class') ? $self->handle_class :
+         'HTTP::Tiny::Handle';
 
     my $handle  = $handle_class->new(
         timeout         => $self->{timeout},
