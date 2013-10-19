@@ -404,7 +404,9 @@ sub _request {
         headers   => {},
     };
 
-    my $handle  = HTTP::Tiny::Handle->new(
+    my $handle_class = $self->{handle_class} || 'HTTP::Tiny::Handle';
+
+    my $handle  = $handle_class->new(
         timeout         => $self->{timeout},
         SSL_options     => $self->{SSL_options},
         verify_SSL      => $self->{verify_SSL},
@@ -425,22 +427,28 @@ sub _request {
     $handle->write_request($request);
 
     my $response;
-    do { $response = $handle->read_response_header }
-        until (substr($response->{status},0,1) ne '1');
-
-    $self->_update_cookie_jar( $url, $response ) if $self->{cookie_jar};
-
-    if ( my @redir_args = $self->_maybe_redirect($request, $response, $args) ) {
-        $handle->close;
-        return $self->_request(@redir_args, $args);
+    if ($handle->can('read_response')) {
+        $response = $handle->read_response;
     }
+    
+    if (!defined $response) {
+        do { $response = $handle->read_response_header }
+            until (substr($response->{status},0,1) ne '1');
 
-    if ($method eq 'HEAD' || $response->{status} =~ /^[23]04/) {
-        # response has no message body
-    }
-    else {
-        my $data_cb = $self->_prepare_data_cb($response, $args);
-        $handle->read_body($data_cb, $response);
+        $self->_update_cookie_jar( $url, $response ) if $self->{cookie_jar};
+
+        if ( my @redir_args = $self->_maybe_redirect($request, $response, $args) ) {
+            $handle->close;
+            return $self->_request(@redir_args, $args);
+        }
+
+        if ($method eq 'HEAD' || $response->{status} =~ /^[23]04/) {
+            # response has no message body
+        }
+        else {
+            my $data_cb = $self->_prepare_data_cb($response, $args);
+            $handle->read_body($data_cb, $response);
+        }
     }
 
     $handle->close;
